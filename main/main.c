@@ -97,6 +97,9 @@ static void enter_deep_sleep(bool display_ok)
 {
     ESP_LOGI(TAG, "Sleep triggered. Safely entering Deep Sleep...");
 
+    // Disable timer wakeup source so Deep Sleep doesn't automatically wake up
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+
     // Set RGB LED to Red (low brightness: 32)
     if (s_led_strip != NULL) {
         led_strip_set_pixel(s_led_strip, 0, 32, 0, 0); // Red
