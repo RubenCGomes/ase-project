@@ -561,10 +561,19 @@ void app_main(void)
             ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
             ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
+            // Configure timer wakeup for another 60 seconds (60,000,000 microseconds)
+            esp_sleep_enable_timer_wakeup(60ULL * 1000 * 1000);
+
             // 5. Enter Light Sleep
             esp_light_sleep_start();
 
             // --- WOKEN UP FROM LIGHT SLEEP ---
+            esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+            if (cause == ESP_SLEEP_WAKEUP_TIMER) {
+                ESP_LOGI(TAG, "Light Sleep timer expired (60s inactivity). Transitioning to Deep Sleep...");
+                enter_deep_sleep(display_ok);
+            }
+
             ESP_LOGI(TAG, "Woke up from Light Sleep!");
             s_ignore_button_until_high = true; // Block deep sleep trigger until button release
 
