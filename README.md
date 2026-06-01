@@ -23,10 +23,11 @@ A Wi-Fi controlled miniature car built on the ESP32-C6 microcontroller using ESP
 | Component | Description |
 |-----------|-------------|
 | ESP32-C6 | Main microcontroller (Wi-Fi, I2C, SPI, LEDC, RMT) |
-| MPU-6050 | 6-axis IMU — accelerometer data used for speed estimation |
+| KS0170 (MPU-6050) | Keyestudio accelerometer module — I2C, used for speed estimation |
 | HC-SR04 | Ultrasonic distance sensor |
 | ST7735 | 1.8" SPI TFT colour display |
-| DC Motors (×2) | Differential drive — left and right independently controlled |
+| DC Motors (×2) | Differential drive — left and right independently controlled via ULN2803A |
+| ULN2803A | 8-channel Darlington array — translates 3.3 V GPIO signals to motor drive current |
 | WS2812B | Onboard addressable RGB LED |
 | External LED | PWM-driven brightness indicator |
 | Push button | Sleep / wake-up trigger on GPIO 1 |
@@ -51,7 +52,7 @@ A Wi-Fi controlled miniature car built on the ESP32-C6 microcontroller using ESP
 | Motor RIGHT | 10 |
 | WS2812B RGB LED | 8 |
 
-Motor drive circuitry uses **IRLZ44N** MOSFETs and **VN2222** transistors — see the datasheets in `docs/`.
+Motor switching uses a **ULN2803A** Darlington transistor array — inputs driven directly from GPIO 10/11, outputs switching the motor supply. See the datasheet in `docs/`.
 
 ## Software
 
