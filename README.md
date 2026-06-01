@@ -120,7 +120,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 |-------|--------|
 | No motor command for 60 s | Light sleep (LED: blue). Press button or wait 60 s more. |
 | 60 s in light sleep | Deep sleep (LED: red)|
-| press button in light sleep | Active state|
+| press button in any sleep state | Active state |
 | Button press during normal operation | Deep sleep immediately. |
 
 ## Wi-Fi Configuration
