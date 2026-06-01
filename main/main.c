@@ -46,8 +46,8 @@ static const char *TAG = "MAIN";
 #define MAX_SPEED_FOR_LED 1.5f // Speed (m/s) at which LED reaches maximum brightness
 
 // Motor GPIO Configuration (Left = 10, Right = 11)
-#define MOTOR_LEFT_PIN  10
-#define MOTOR_RIGHT_PIN 11
+#define MOTOR_LEFT_PIN  11
+#define MOTOR_RIGHT_PIN 10
 
 // Onboard RGB LED (WS2812) Config
 #define LED_STRIP_GPIO_PIN 8
@@ -304,8 +304,15 @@ static esp_err_t motor_get_handler(httpd_req_t *req)
             char dir[16] = {0};
             if (httpd_query_key_value(buf, "dir", dir, sizeof(dir)) == ESP_OK) {
                 if (strcmp(dir, "fwd") == 0) {
-                    gpio_set_level(MOTOR_LEFT_PIN, 1);
-                    gpio_set_level(MOTOR_RIGHT_PIN, 1);
+                    if (s_distance_cm >= 0.0f && s_distance_cm < 20.0f) {
+                        gpio_set_level(MOTOR_LEFT_PIN, 0);
+                        gpio_set_level(MOTOR_RIGHT_PIN, 0);
+                        ESP_LOGW(TAG, "Forward blocked: Obstacle detected at %.1f cm", s_distance_cm);
+                    } else {
+                        // Staggered motor start to reduce power supply inrush current
+                        gpio_set_level(MOTOR_LEFT_PIN, 1);
+                        gpio_set_level(MOTOR_RIGHT_PIN, 1);
+                    }
                 } else if (strcmp(dir, "left") == 0) {
                     gpio_set_level(MOTOR_LEFT_PIN, 1);
                     gpio_set_level(MOTOR_RIGHT_PIN, 0);
@@ -333,8 +340,22 @@ static esp_err_t motor_get_handler(httpd_req_t *req)
 }
 
 // Initialize Web Server
+static httpd_handle_t s_web_server = NULL;
+
+static void stop_webserver(void)
+{
+    if (s_web_server != NULL) {
+        ESP_LOGI(TAG, "Stopping HTTP server...");
+        httpd_stop(s_web_server);
+        s_web_server = NULL;
+    }
+}
+
 static httpd_handle_t start_webserver(void)
 {
+    if (s_web_server != NULL) {
+        return s_web_server;
+    }
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
@@ -365,6 +386,7 @@ static httpd_handle_t start_webserver(void)
         };
         httpd_register_uri_handler(server, &motor_uri);
 
+        s_web_server = server;
         return server;
     }
 
@@ -567,6 +589,10 @@ void app_main(void)
             // Configure timer wakeup for another 60 seconds (60,000,000 microseconds)
             esp_sleep_enable_timer_wakeup(60ULL * 1000 * 1000);
 
+            // Stop webserver and Wi-Fi to conserve power and ensure clean re-initialization upon wakeup
+            stop_webserver();
+            esp_wifi_stop();
+
             // 5. Enter Light Sleep
             esp_light_sleep_start();
 
@@ -576,6 +602,10 @@ void app_main(void)
                 ESP_LOGI(TAG, "Light Sleep timer expired (60s inactivity). Transitioning to Deep Sleep...");
                 enter_deep_sleep(display_ok);
             }
+
+            // Restart Wi-Fi and webserver upon wakeup
+            esp_wifi_start();
+            start_webserver();
 
             ESP_LOGI(TAG, "Woke up from Light Sleep!");
             s_ignore_button_until_high = true; // Block deep sleep trigger until button release
@@ -704,6 +734,15 @@ void app_main(void)
             s_speed = 0.0f;
         }
 
+        // Collision mitigation safety check: if moving forward and distance is too close (< 25 cm), stop motors
+        if (gpio_get_level(MOTOR_LEFT_PIN) == 1 && gpio_get_level(MOTOR_RIGHT_PIN) == 1) {
+            if (s_distance_cm >= 0.0f && s_distance_cm < 25.0f) {
+                gpio_set_level(MOTOR_LEFT_PIN, 0);
+                gpio_set_level(MOTOR_RIGHT_PIN, 0);
+                ESP_LOGW(TAG, "Collision mitigation triggered! Stop motors. Obstacle at %.1f cm", s_distance_cm);
+            }
+        }
+
         // Throttle TFT display updates to 5 Hz (every 10 loop iterations / 200ms)
         static int display_counter = 0;
         display_counter++;
@@ -749,7 +788,12 @@ void app_main(void)
                 } else if (!left && right) {
                     st7735_draw_string(10, 66, "Motor: RIGHT    ", ST7735_CYAN, ST7735_BLACK, 1);
                 } else {
-                    st7735_draw_string(10, 66, "Motor: STOP     ", ST7735_GRAY, ST7735_BLACK, 1);
+                    // Show BLOCKED if we are stopped near an obstacle
+                    if (s_distance_cm >= 0.0f && s_distance_cm < 25.0f) {
+                        st7735_draw_string(10, 66, "Motor: BLOCKED  ", ST7735_RED, ST7735_BLACK, 1);
+                    } else {
+                        st7735_draw_string(10, 66, "Motor: STOP     ", ST7735_GRAY, ST7735_BLACK, 1);
+                    }
                 }
             }
         }
