@@ -45,7 +45,6 @@ esp_err_t mpu6050_init(i2c_master_bus_handle_t* pBusHandle,
         return err;
     }
 
-    // Wake up MPU-6050 by writing 0 to PWR_MGMT_1
     ESP_LOGI(TAG, "Waking up MPU-6050...");
     uint8_t wakeupCmd[2] = {MPU6050_REG_PWR_MGMT_1, 0x00};
     err = i2c_master_transmit(*pSensorHandle, wakeupCmd, sizeof(wakeupCmd), -1);
@@ -56,7 +55,6 @@ esp_err_t mpu6050_init(i2c_master_bus_handle_t* pBusHandle,
         return err;
     }
 
-    // Verify WHO_AM_I register
     uint8_t whoAmIReg = MPU6050_REG_WHO_AM_I;
     uint8_t whoAmIVal = 0;
     err = i2c_master_transmit_receive(*pSensorHandle, &whoAmIReg, 1, &whoAmIVal, 1, -1);
@@ -67,10 +65,9 @@ esp_err_t mpu6050_init(i2c_master_bus_handle_t* pBusHandle,
         return err;
     }
 
-    ESP_LOGI(TAG, "WHO_AM_I read: 0x%02X (Expected: 0x68)", whoAmIVal);
+    ESP_LOGI(TAG, "WHO_AM_I read: 0x%02X (Expected: 0x68)", whoAmIVal); // 0x68 checked with i2cconfig, used in previous classes
     if (whoAmIVal != 0x68) {
         ESP_LOGW(TAG, "WHO_AM_I value mismatch! Got 0x%02X, expected 0x68", whoAmIVal);
-        // We can still proceed, but log it as a warning
     }
 
     ESP_LOGI(TAG, "MPU-6050 initialized successfully.");

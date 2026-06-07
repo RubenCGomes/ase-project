@@ -5,7 +5,7 @@
 #include "esp_err.h"
 
 /**
- * @brief Initialize HC-SR04 distance sensor.
+ * @brief 
  * 
  * @param trigPin GPIO number for Trigger pin (Output)
  * @param echoPin GPIO number for Echo pin (Input)
@@ -18,8 +18,8 @@ void hc_sr04_init(int trigPin, int echoPin);
  * @param trigPin GPIO number for Trigger pin
  * @param echoPin GPIO number for Echo pin
  * @param pDistanceCm Pointer to store the measured distance in cm
- * @return esp_err_t ESP_OK on success, ESP_ERR_TIMEOUT if echo pulse timed out
+ * @return
  */
 esp_err_t hc_sr04_read_distance(int trigPin, int echoPin, float* pDistanceCm);
 
-#endif // __HC_SR04_H__INCLUDED__
+#endif

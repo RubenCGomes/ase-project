@@ -1,6 +1,6 @@
 #include "hc_sr04.h"
 #include "esp_timer.h"
-#include "rom/ets_sys.h" // For ets_delay_us
+#include "rom/ets_sys.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -32,8 +32,9 @@ esp_err_t hc_sr04_read_distance(int trigPin, int echoPin, float* pDistanceCm)
         gpio_set_direction(echoPin, GPIO_MODE_OUTPUT);
         // Drive it LOW to reset the sensor's controller
         gpio_set_level(echoPin, 0);
-        // Wait 10ms using vTaskDelay to let other tasks run
+
         vTaskDelay(pdMS_TO_TICKS(10));
+
         // Reconfigure Echo pin back to Input
         gpio_set_direction(echoPin, GPIO_MODE_INPUT);
         gpio_set_pull_mode(echoPin, GPIO_FLOATING);
@@ -51,7 +52,7 @@ esp_err_t hc_sr04_read_distance(int trigPin, int echoPin, float* pDistanceCm)
     gpio_set_level(trigPin, 0);
     ets_delay_us(5);
 
-    // 2. Trigger the sensor by sending a 15us HIGH pulse (ensuring all clones trigger)
+    // 2. Trigger the sensor by sending a HIGH pulse
     gpio_set_level(trigPin, 1);
     ets_delay_us(15);
     gpio_set_level(trigPin, 0);
@@ -69,19 +70,18 @@ esp_err_t hc_sr04_read_distance(int trigPin, int echoPin, float* pDistanceCm)
     // 4. Wait for Echo to go LOW with timeout (20ms)
     while (gpio_get_level(echoPin) == 1) {
         if (esp_timer_get_time() - echo_start > 20000) {
-            *pDistanceCm = 400.0f; // Out of range / no obstacle
+            *pDistanceCm = 400.0f; // no echo received
             return ESP_OK;
         }
     }
     int64_t echo_end = esp_timer_get_time();
 
     // 5. Calculate distance
-    int64_t duration = echo_end - echo_start; // duration in microseconds
+    int64_t duration = echo_end - echo_start;
     
     // Distance = duration * speed of sound (343 m/s = 0.0343 cm/us) / 2
     *pDistanceCm = (float)duration * 0.0343f / 2.0f;
     
-    // Cap at typical max sensor range
     if (*pDistanceCm > 400.0f) {
         *pDistanceCm = 400.0f;
     }

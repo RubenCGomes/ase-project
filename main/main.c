@@ -41,11 +41,11 @@ static const char *TAG = "MAIN";
 // Sleep Button Pin Configuration (GPIO 1 is LP_GPIO, supporting Deep Sleep wakeup)
 #define BUTTON_GPIO_PIN 1
 
-// External LED Pin Configuration (PWM driven, scaling with speed)
+// External LED Pin Configuration
 #define EXTERNAL_LED_PIN 0
 #define MAX_SPEED_FOR_LED 1.5f // Speed (m/s) at which LED reaches maximum brightness
 
-// Motor GPIO Configuration (Left = 10, Right = 11)
+// Motor GPIO Configuration (Left = 11, Right = 10)
 #define MOTOR_LEFT_PIN  11
 #define MOTOR_RIGHT_PIN 10
 
@@ -58,13 +58,13 @@ static volatile uint32_t s_last_command_time = 0;
 static volatile bool s_ignore_button_until_high = false;
 
 // Velocity and Filter parameters
-#define ACCEL_ALPHA 0.8f          // Low-pass filter coefficient (Exponential Moving Average)
+#define ACCEL_ALPHA 0.8f          // Low-pass filter coefficient
 #define ACCEL_DEADBAND 0.15f      // Deadband in m/s^2 to ignore noise
 #define VELOCITY_DAMPING 0.98f    // Damping factor to simulate friction
 
 static volatile float s_velocity_x = 0.0f;
 static volatile float s_velocity_y = 0.0f;
-static volatile float s_speed = 0.0f; // Magnitude of velocity
+static volatile float s_speed = 0.0f;
 static float s_cal_ax = 0.0f;
 static float s_cal_ay = 0.0f;
 static volatile bool s_calibrated = false;
@@ -73,7 +73,7 @@ static void button_poll_task(void *pvParameters)
 {
     while (1) {
         if (s_ignore_button_until_high) {
-            // Ignore button presses until the button is released (goes back to 1)
+            // Ignore button presses until the button is released 
             if (gpio_get_level(BUTTON_GPIO_PIN) == 1) {
                 s_ignore_button_until_high = false;
             }
@@ -82,14 +82,14 @@ static void button_poll_task(void *pvParameters)
         }
 
         if (gpio_get_level(BUTTON_GPIO_PIN) == 0) {
-            vTaskDelay(pdMS_TO_TICKS(30)); // Debounce
+            vTaskDelay(pdMS_TO_TICKS(30)); 
             if (!s_ignore_button_until_high && gpio_get_level(BUTTON_GPIO_PIN) == 0) {
                 // Signal to main task to perform shutdown
                 s_go_to_sleep = true;
-                vTaskSuspend(NULL); // Suspend ourselves
+                vTaskSuspend(NULL);
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(20)); // Poll every 20 ms
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
@@ -120,9 +120,9 @@ static void enter_deep_sleep(bool display_ok)
     while (gpio_get_level(BUTTON_GPIO_PIN) == 0) {
         vTaskDelay(pdMS_TO_TICKS(20));
     }
-    vTaskDelay(pdMS_TO_TICKS(50)); // Debounce release transition
+    vTaskDelay(pdMS_TO_TICKS(50));
 
-    // Configure Deep Sleep wakeup using EXT1 on GPIO 1 (active low)
+    // Configure Deep Sleep wakeup using EXT1 on GPIO 1
     esp_sleep_enable_ext1_wakeup(1ULL << BUTTON_GPIO_PIN, ESP_EXT1_WAKEUP_ANY_LOW);
 
     // Keep RTC peripherals powered on during deep sleep so the internal pull-up is maintained
@@ -156,7 +156,7 @@ static void init_onboard_led(void)
     esp_err_t err = led_strip_new_rmt_device(&strip_config, &rmt_config, &s_led_strip);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Onboard RGB LED initialized. Setting color to Green.");
-        led_strip_set_pixel(s_led_strip, 0, 0, 32, 0); // Green (further reduced intensity)
+        led_strip_set_pixel(s_led_strip, 0, 0, 32, 0); // Green
         led_strip_refresh(s_led_strip);
     } else {
         ESP_LOGE(TAG, "Failed to initialize onboard RGB LED: %s", esp_err_to_name(err));
@@ -182,7 +182,7 @@ static void init_external_led_pwm(void)
         .timer_sel      = LEDC_TIMER_0,
         .intr_type      = LEDC_INTR_DISABLE,
         .gpio_num       = EXTERNAL_LED_PIN,
-        .duty           = 0, // Start with LED off
+        .duty           = 0,
         .hpoint         = 0
     };
     ledc_channel_config(&ledc_channel);
@@ -194,7 +194,7 @@ static void init_external_led_pwm(void)
 #define WIFI_CHANNEL    1
 #define MAX_STA_CONN    4
 
-// Shared sensor readings (atomic 32-bit floats, no mutex required)
+// Shared sensor readings
 static volatile float s_ax_g = 0.0f;
 static volatile float s_ay_g = 0.0f;
 static volatile float s_az_g = 0.0f;
@@ -273,7 +273,7 @@ static esp_err_t data_get_handler(httpd_req_t *req)
     float dist = s_distance_cm;
     float speed = s_speed;
     
-    // Log values every 2 seconds for debugging
+    // Log values every 2 seconds
     static uint32_t last_log_time = 0;
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (now - last_log_time > 2000) {
@@ -304,12 +304,11 @@ static esp_err_t motor_get_handler(httpd_req_t *req)
             char dir[16] = {0};
             if (httpd_query_key_value(buf, "dir", dir, sizeof(dir)) == ESP_OK) {
                 if (strcmp(dir, "fwd") == 0) {
-                    if (s_distance_cm >= 0.0f && s_distance_cm < 20.0f) {
+                    if (s_distance_cm >= 0.0f && s_distance_cm < 25.0f) {
                         gpio_set_level(MOTOR_LEFT_PIN, 0);
                         gpio_set_level(MOTOR_RIGHT_PIN, 0);
                         ESP_LOGW(TAG, "Forward blocked: Obstacle detected at %.1f cm", s_distance_cm);
                     } else {
-                        // Staggered motor start to reduce power supply inrush current
                         gpio_set_level(MOTOR_LEFT_PIN, 1);
                         gpio_set_level(MOTOR_RIGHT_PIN, 1);
                     }
@@ -405,15 +404,15 @@ static void distance_sensor_task(void *pvParameters)
         } else {
             s_distance_cm = -1.0f;
         }
-        vTaskDelay(pdMS_TO_TICKS(200)); // Poll every 200 ms
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
 
 void app_main(void)
 {
-    vTaskPrioritySet(NULL, 3); // Elevate main task priority to 3 to prevent CPU starvation from busy-waiting drivers
+    vTaskPrioritySet(NULL, 3);
 
-    // 1. Initialize NVS (Required for Wi-Fi configurations)
+    // 1. Initialize NVS for wifi credentials storage and other settings
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -424,14 +423,14 @@ void app_main(void)
     // Initialize command activity timer
     s_last_command_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-    // Onboard RGB LED initialization (Active = Green)
+    // Onboard RGB LED initialization
     init_onboard_led();
 
     // External LED PWM initialization
     init_external_led_pwm();
 
     // Initialize sleep button on GPIO 1
-    gpio_hold_dis(BUTTON_GPIO_PIN); // Release GPIO hold from previous Deep Sleep
+    gpio_hold_dis(BUTTON_GPIO_PIN);
     gpio_config_t btn_config = {
         .pin_bit_mask = (1ULL << BUTTON_GPIO_PIN),
         .mode = GPIO_MODE_INPUT,
@@ -441,7 +440,7 @@ void app_main(void)
     };
     gpio_config(&btn_config);
 
-    // Initialize motor control GPIOs (10 and 11)
+    // Initialize motor control GPIOs
     gpio_config_t motor_cfg = {
         .pin_bit_mask = (1ULL << MOTOR_LEFT_PIN) | (1ULL << MOTOR_RIGHT_PIN),
         .mode = GPIO_MODE_INPUT_OUTPUT,
@@ -453,10 +452,10 @@ void app_main(void)
     gpio_set_level(MOTOR_LEFT_PIN, 0);
     gpio_set_level(MOTOR_RIGHT_PIN, 0);
 
-    // Create responsive button polling task (20ms interval)
+    // Create responsive button polling task
     xTaskCreate(button_poll_task, "btn_poll_task", 2560, NULL, 5, NULL);
 
-    // 2. Initialize TFT display
+    // Initialize TFT display
     ESP_LOGI(TAG, "Initializing TFT display...");
     st7735_config_t tftCfg = {
        .mosi_io_num = PIN_MOSI,
@@ -474,26 +473,25 @@ void app_main(void)
         ESP_LOGI(TAG, "TFT display initialized successfully.");
         st7735_fill_screen(ST7735_BLACK);
         
-        // Print layout and headers
         st7735_draw_string(10, 8,  "ESP32-C6 ACCEL", ST7735_CYAN, ST7735_BLACK, 1);
         st7735_draw_string(10, 18, "==============", ST7735_GRAY, ST7735_BLACK, 1);
     } else {
         ESP_LOGE(TAG, "Failed to initialize TFT display!");
     }
 
-    // 3. Initialize Wi-Fi SoftAP
+    // Initialize Wi-Fi SoftAP
     wifi_init_softap();
 
-    // 4. Start Web Server
+    // Start Web Server
     start_webserver();
 
-    // 5. Initialize HC-SR04 Distance Sensor & Dedicated Task
+    // Initialize HC-SR04 Distance Sensor & Dedicated Task
     ESP_LOGI(TAG, "Initializing HC-SR04 sensor (Trig: GPIO %d, Echo: GPIO %d)...", 
              HC_SR04_TRIG_PIN, HC_SR04_ECHO_PIN);
     hc_sr04_init(HC_SR04_TRIG_PIN, HC_SR04_ECHO_PIN);
     xTaskCreate(distance_sensor_task, "dist_task", 3072, NULL, 4, NULL); // Run at priority 4 (higher than main task priority 3, lower than button poll task 5)
 
-    // 6. Initialize MPU-6050 Accelerometer (Robust retry initialization)
+    // Initialize MPU-6050 Accelerometer
     i2c_master_bus_handle_t busHandle = NULL;
     i2c_master_dev_handle_t sensorHandle = NULL;
     bool mpu_ok = false;
@@ -555,27 +553,27 @@ void app_main(void)
             enter_deep_sleep(display_ok);
         }
 
-        // Check inactivity timeout (60 seconds) for Light Sleep
+        // Check inactivity timeout for Light Sleep
         uint32_t current_ticks = xTaskGetTickCount();
         if (current_ticks * portTICK_PERIOD_MS - s_last_command_time > 60000) {
             ESP_LOGI(TAG, "No movement command for 60s. Entering Light Sleep...");
 
-            // 1. Set RGB LED to Blue (low brightness: 32)
+            // Set RGB LED to Blue
             if (s_led_strip != NULL) {
-                led_strip_set_pixel(s_led_strip, 0, 0, 0, 32); // Blue
+                led_strip_set_pixel(s_led_strip, 0, 0, 0, 32);
                 led_strip_refresh(s_led_strip);
             }
 
-            // 2. Clear screen and draw light sleep message
+            // Clear screen and draw light sleep message
             if (display_ok) {
                 st7735_fill_screen(ST7735_BLACK);
                 st7735_draw_string(10, 30, "Light Sleep Mode", ST7735_BLUE, ST7735_BLACK, 1);
             }
 
-            // 3. Delay to let RMT and TFT finish refreshing
+            // Delay to let RMT and TFT finish refreshing
             vTaskDelay(pdMS_TO_TICKS(100));
 
-            // 4. Configure GPIO 1 (button) to wake us up from Light Sleep
+            // Configure GPIO 1 button to wake us up from Light Sleep
             gpio_wakeup_enable(BUTTON_GPIO_PIN, GPIO_INTR_LOW_LEVEL);
             esp_sleep_enable_gpio_wakeup();
 
@@ -586,14 +584,14 @@ void app_main(void)
             ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
             ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
-            // Configure timer wakeup for another 60 seconds (60,000,000 microseconds)
+            // Configure timer wakeup for another 60 seconds
             esp_sleep_enable_timer_wakeup(60ULL * 1000 * 1000);
 
             // Stop webserver and Wi-Fi to conserve power and ensure clean re-initialization upon wakeup
             stop_webserver();
             esp_wifi_stop();
 
-            // 5. Enter Light Sleep
+            // Enter Light Sleep
             esp_light_sleep_start();
 
             // --- WOKEN UP FROM LIGHT SLEEP ---
@@ -608,27 +606,27 @@ void app_main(void)
             start_webserver();
 
             ESP_LOGI(TAG, "Woke up from Light Sleep!");
-            s_ignore_button_until_high = true; // Block deep sleep trigger until button release
+            s_ignore_button_until_high = true;
 
             // Reset velocity tracking variables to clear old values
             s_velocity_x = 0.0f;
             s_velocity_y = 0.0f;
             s_speed = 0.0f;
 
-            // 6. Restore LED to Green (low brightness: 32)
+            // Restore LED to Green
             if (s_led_strip != NULL) {
-                led_strip_set_pixel(s_led_strip, 0, 0, 32, 0); // Green
+                led_strip_set_pixel(s_led_strip, 0, 0, 32, 0);
                 led_strip_refresh(s_led_strip);
             }
 
-            // 7. Restore TFT screen display headers
+            // Restore TFT screen display headers
             if (display_ok) {
                 st7735_fill_screen(ST7735_BLACK);
                 st7735_draw_string(10, 8,  "ESP32-C6 ACCEL", ST7735_CYAN, ST7735_BLACK, 1);
                 st7735_draw_string(10, 18, "==============", ST7735_GRAY, ST7735_BLACK, 1);
             }
 
-            // 8. Reset inactivity timer
+            // Reset inactivity timer
             s_last_command_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
         }
 
@@ -636,7 +634,7 @@ void app_main(void)
         if (!mpu_ok) {
             static uint32_t last_retry_ticks = 0;
             uint32_t now_ticks = xTaskGetTickCount();
-            if (now_ticks - last_retry_ticks > pdMS_TO_TICKS(5000)) { // retry every 5s
+            if (now_ticks - last_retry_ticks > pdMS_TO_TICKS(5000)) { 
                 last_retry_ticks = now_ticks;
                 ESP_LOGI(TAG, "Retrying MPU-6050 initialization...");
                 err = mpu6050_init(&busHandle, &sensorHandle, MPU6050_SENSOR_ADDR, 
@@ -659,7 +657,7 @@ void app_main(void)
 
         // Keep dt bounded to prevent massive steps during startup or sleep wakeups
         if (dt <= 0.0 || dt > 0.1) {
-            dt = 0.02; // default to 20ms
+            dt = 0.02; 
         }
 
         double ax_g = 0.0, ay_g = 0.0, az_g = 0.0;
@@ -679,7 +677,7 @@ void app_main(void)
                     double raw_ax = ax_g - s_cal_ax;
                     double raw_ay = ay_g - s_cal_ay;
 
-                    // Apply low-pass filter (Exponential Moving Average)
+                    // Apply low-pass filter to reduce noise before integration
                     static double filtered_ax = 0.0;
                     static double filtered_ay = 0.0;
                     filtered_ax = ACCEL_ALPHA * filtered_ax + (1.0 - ACCEL_ALPHA) * raw_ax;
@@ -697,11 +695,11 @@ void app_main(void)
                     s_velocity_x += acc_x * dt;
                     s_velocity_y += acc_y * dt;
 
-                    // Damping (rolling friction decay)
+                    // Damping
                     s_velocity_x *= VELOCITY_DAMPING;
                     s_velocity_y *= VELOCITY_DAMPING;
 
-                    // Zero-Velocity Update (ZUPT): if motors are stopped and acceleration is near zero, reset velocity
+                    // Zero-Velocity Update: if motors are stopped and acceleration is near zero, reset velocity
                     if (gpio_get_level(MOTOR_LEFT_PIN) == 0 && gpio_get_level(MOTOR_RIGHT_PIN) == 0) {
                         if (fabs(acc_x) < 0.05 && fabs(acc_y) < 0.05) {
                             s_velocity_x = 0.0f;
@@ -743,7 +741,7 @@ void app_main(void)
             }
         }
 
-        // Throttle TFT display updates to 5 Hz (every 10 loop iterations / 200ms)
+        // Throttle TFT display updates to 5 Hz
         static int display_counter = 0;
         display_counter++;
         if (display_counter >= 10) {
@@ -798,7 +796,7 @@ void app_main(void)
             }
         }
 
-        // Update external LED PWM brightness based on speed (responsively at 50 Hz)
+        // Update external LED PWM brightness based on speed
         uint32_t duty = 0;
         if (s_speed > 0.0f) {
             float ratio = s_speed / MAX_SPEED_FOR_LED;
